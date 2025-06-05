@@ -3,9 +3,9 @@ package Test;
 import Main.JSONLexer;
 import Main.JSONParser;
 import Main.Token;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -17,21 +17,27 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+class JSONFileValidationTest {
 
-@RunWith(Parameterized.class)
-public class JSONFileValidationTest {
-    private final Path filePath;
-    private final boolean shouldBeValid;
+    // Parameterized test method that accepts parameters directly
+    @ParameterizedTest
+    @MethodSource("data")
+    void testJsonFileValidation(Path filePath, boolean shouldBeValid) {
+        try {
+            String jsonContent = new String(Files.readAllBytes(filePath));
+            JSONLexer lexer = new JSONLexer(jsonContent);
+            List<Token> tokens = lexer.tokenize();
+            JSONParser parser = new JSONParser(tokens);
+            parser.parse();
 
-    public JSONFileValidationTest(Path filePath, boolean shouldBeValid) {
-        this.filePath = filePath;
-        this.shouldBeValid = shouldBeValid;
+            Assertions.assertTrue(shouldBeValid, "Expected valid JSON, but got invalid JSON: " + filePath);
+        } catch (Exception e) {
+            Assertions.assertTrue(!shouldBeValid, "Expected invalid JSON, but got valid JSON: " + filePath);
+        }
     }
 
-    @Parameterized.Parameters(name = "{index}: Testing {0}")
-    public static Collection<Object[]> data() {
+    // This method will provide the parameters for the parameterized test
+    static Collection<Object[]> data() {
         String baseDir = System.getProperty("user.dir") + "/resources/";
         List<Object[]> testCases = new ArrayList<>();
 
@@ -46,24 +52,9 @@ public class JSONFileValidationTest {
                 testCases.add(new Object[]{file, shouldBeValid});
             }
         } catch (IOException e) {
-            fail("Error reading directory: " + e.getMessage());
+            Assertions.fail("Error reading directory: " + e.getMessage());
         }
 
         return testCases;
-    }
-
-    @Test
-    public void testJsonFileValidation() {
-        try {
-            String jsonContent = new String(Files.readAllBytes(filePath));
-            JSONLexer lexer = new JSONLexer(jsonContent);
-            List<Token> tokens = lexer.tokenize();
-            JSONParser parser = new JSONParser(tokens);
-            parser.parse();
-
-            assertTrue("Expected valid JSON, but got invalid JSON: " + filePath, shouldBeValid);
-        } catch (Exception e) {
-            assertTrue("Expected invalid JSON, but got valid JSON: " + filePath, !shouldBeValid);
-        }
     }
 }

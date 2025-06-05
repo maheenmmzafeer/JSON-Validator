@@ -2,7 +2,12 @@ package Main;
 
 public class Token {
     public enum Type {
-        LEFT_BRACE, RIGHT_BRACE, LEFT_BRACKET, RIGHT_BRACKET, COLON, COMMA, STRING, NUMBER, BOOLEAN, NULL, END
+        LEFT_BRACE, RIGHT_BRACE,
+        LEFT_BRACKET, RIGHT_BRACKET,
+        COLON, COMMA,
+        STRING, NUMBER,
+        BOOLEAN, NULL,
+        END
     }
 
     private final Type type;
@@ -23,6 +28,6 @@ public class Token {
 
     @Override
     public String toString() {
-        return String.format("%s(%s)", type, value);
+        return type + (value.isEmpty() ? "" : "(" + value + ")");
     }
 }
