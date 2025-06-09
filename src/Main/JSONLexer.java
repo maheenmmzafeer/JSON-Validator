@@ -7,65 +7,75 @@ public class JSONLexer {
     private final String input;
     private int pos = 0;
     private int depth = 0;
-    private static final int MAX_DEPTH = 19; // Set a reasonable depth limit
+    private static final int MAX_DEPTH = 19;
 
     public JSONLexer(String input) throws Exception {
         this.input = input.trim();
-        validateJsonStart(); // Ensure JSON starts correctly
+        validateJsonStart();
     }
 
     public List<Token> tokenize() throws Exception {
         List<Token> tokens = new ArrayList<>();
         boolean expectColon = false;
+
         while (pos < input.length()) {
             char c = input.charAt(pos);
             if (Character.isWhitespace(c)) {
                 pos++;
-            } else if (c == '{' || c == '[') {
-                depth++;
-                if (depth > MAX_DEPTH) {
-                    throw new Exception("Invalid JSON: Too deeply nested at position " + pos);
-                }
-                tokens.add(new Token(c == '{' ? Token.Type.LEFT_BRACE : Token.Type.LEFT_BRACKET, String.valueOf(c)));
-                pos++;
-                expectColon = (c == '{');
-            } else if (c == '}' || c == ']') {
-                depth--;
-                tokens.add(new Token(c == '}' ? Token.Type.RIGHT_BRACE : Token.Type.RIGHT_BRACKET, String.valueOf(c)));
-                pos++;
-                expectColon = false;
-            } else if (c == ':') {
-                tokens.add(new Token(Token.Type.COLON, ":"));
-                pos++;
-                expectColon = false;
-            } else if (c == ',') {
-                tokens.add(new Token(Token.Type.COMMA, ","));
-                pos++;
-                expectColon = false;
-            } else if (c == '"') {
-                tokens.add(new Token(Token.Type.STRING, extractString()));
-                expectColon = true;
-            } else if (Character.isDigit(c) || c == '-') {
-                if (expectColon) {
-                    throw new Exception("Expected colon before value at position " + pos);
-                }
-                tokens.add(new Token(Token.Type.NUMBER, extractNumber()));
-            } else if (input.startsWith("true", pos)) {
-                tokens.add(new Token(Token.Type.BOOLEAN, "true"));
-                pos += 4;
-                expectColon = false;
-            } else if (input.startsWith("false", pos)) {
-                tokens.add(new Token(Token.Type.BOOLEAN, "false"));
-                pos += 5;
-                expectColon = false;
-            } else if (input.startsWith("null", pos)) {
-                tokens.add(new Token(Token.Type.NULL, "null"));
-                pos += 4;
-                expectColon = false;
-            } else {
-                throw new Exception("Unexpected character at position " + pos + ": " + c);
+                continue;
+            }
+
+            switch (c) {
+                case '{': case '[':
+                    depth++;
+                    if (depth > MAX_DEPTH) {
+                        throw new Exception("Invalid JSON: Too deeply nested at position " + pos);
+                    }
+                    tokens.add(new Token(c == '{' ? Token.Type.LEFT_BRACE : Token.Type.LEFT_BRACKET, String.valueOf(c)));
+                    pos++;
+                    expectColon = (c == '{');
+                    break;
+                case '}': case ']':
+                    depth--;
+                    tokens.add(new Token(c == '}' ? Token.Type.RIGHT_BRACE : Token.Type.RIGHT_BRACKET, String.valueOf(c)));
+                    pos++;
+                    expectColon = false;
+                    break;
+                case ':':
+                    tokens.add(new Token(Token.Type.COLON, ":"));
+                    pos++;
+                    expectColon = false;
+                    break;
+                case ',':
+                    tokens.add(new Token(Token.Type.COMMA, ","));
+                    pos++;
+                    expectColon = false;
+                    break;
+                case '"':
+                    tokens.add(new Token(Token.Type.STRING, extractString()));
+                    expectColon = true;
+                    break;
+                default:
+                    if (Character.isDigit(c) || c == '-') {
+                        if (expectColon)
+                            throw new Exception("Expected colon before value at position " + pos);
+                        tokens.add(new Token(Token.Type.NUMBER, extractNumber()));
+                    } else if (input.startsWith("true", pos)) {
+                        tokens.add(new Token(Token.Type.BOOLEAN, "true"));
+                        pos += 4;
+                    } else if (input.startsWith("false", pos)) {
+                        tokens.add(new Token(Token.Type.BOOLEAN, "false"));
+                        pos += 5;
+                    } else if (input.startsWith("null", pos)) {
+                        tokens.add(new Token(Token.Type.NULL, "null"));
+                        pos += 4;
+                    } else {
+                        throw new Exception("Unexpected character at position " + pos + ": " + c);
+                    }
+                    expectColon = false;
             }
         }
+
         tokens.add(new Token(Token.Type.END, ""));
         return tokens;
     }
@@ -75,6 +85,7 @@ public class JSONLexer {
             throw new Exception("Invalid JSON: A JSON payload should be an object or array, not a string.");
         }
     }
+
     private String extractString() throws Exception {
         int start = ++pos;
         StringBuilder sb = new StringBuilder();
@@ -89,41 +100,7 @@ public class JSONLexer {
             }
 
             if (ch == '\\') {
-                // Handle escape sequences
-                if (pos + 1 >= input.length()) {
-                    throw new Exception("Unterminated escape sequence at position " + pos);
-                }
-
-                char nextChar = input.charAt(pos + 1);
-                if (nextChar == 'u') {
-                    // Handle Unicode escape sequence
-                    if (pos + 5 >= input.length()) {
-                        throw new Exception("Incomplete Unicode escape sequence at position " + pos);
-                    }
-                    String hex = input.substring(pos + 2, pos + 6);
-                    try {
-                        int codePoint = Integer.parseInt(hex, 16);
-                        sb.append((char) codePoint);
-                        pos += 6;
-                        continue;
-                    } catch (NumberFormatException e) {
-                        throw new Exception("Invalid Unicode escape sequence at position " + pos);
-                    }
-                }
-
-                switch (nextChar) {
-                    case '"': sb.append('"'); break;
-                    case '\\': sb.append('\\'); break;
-                    case 'b': sb.append('\b'); break;
-                    case 'f': sb.append('\f'); break;
-                    case 'n': sb.append('\n'); break;
-                    case 'r': sb.append('\r'); break;
-                    case 't': sb.append('\t'); break;
-                    case '/': sb.append('/'); break;
-                    default:
-                        throw new Exception("Illegal escape sequence at position " + pos);
-                }
-                pos += 2;
+                sb.append(handleEscapeSequence());
                 continue;
             }
 
@@ -138,83 +115,87 @@ public class JSONLexer {
         throw new Exception("Unterminated string starting at position " + start);
     }
 
+    private String handleEscapeSequence() throws Exception {
+        if (pos + 1 >= input.length()) {
+            throw new Exception("Unterminated escape sequence at position " + pos);
+        }
+        char nextChar = input.charAt(pos + 1);
+        pos += 2;
+
+        switch (nextChar) {
+            case '"':
+                return "\"";
+            case '\\':
+                return "\\";
+            case '/':
+                return "/";
+            case 'b':
+                return "\b";
+            case 'f':
+                return "\f";
+            case 'n':
+                return "\n";
+            case 'r':
+                return "\r";
+            case 't':
+                return "\t";
+            case 'u':
+                if (pos + 5 >= input.length()) {
+                    throw new Exception("Incomplete Unicode escape sequence at position " + pos);
+                }
+                String hex = input.substring(pos, pos + 4);
+                try {
+                    pos += 4;
+                    return String.valueOf((char) Integer.parseInt(hex, 16));
+                } catch (NumberFormatException e) {
+                    throw new Exception("Invalid Unicode escape sequence at position " + (pos - 4));
+                }
+            default:
+                throw new Exception("Illegal escape sequence at position " + pos);
+        }
+    }
+
     private String extractNumber() throws Exception {
         int start = pos;
-        boolean hasDecimal = false;
-        boolean hasExponent = false;
+        boolean hasDecimal = false, hasExponent = false;
 
-        checkLeadingSign();
-        checkLeadingZero();
+        if (input.charAt(pos) == '-' || input.charAt(pos) == '+') {
+            pos++;
+        }
+
+        if (input.charAt(pos) == '0' && pos + 1 < input.length() &&
+                (Character.isDigit(input.charAt(pos + 1)) || input.charAt(pos + 1) == 'x')) {
+            throw new Exception("Invalid number format: Leading zero or hexadecimal at position " + pos);
+        }
 
         while (pos < input.length()) {
             char c = input.charAt(pos);
             if (Character.isDigit(c)) {
                 pos++;
             } else if (c == '.') {
-                validateDecimal(hasDecimal);
+                if (hasDecimal) throw new Exception("Multiple decimal points at position " + pos);
                 hasDecimal = true;
+                pos++;
             } else if (c == 'e' || c == 'E') {
-                validateExponent(hasExponent);
+                if (hasExponent) throw new Exception("Multiple exponents at position " + pos);
                 hasExponent = true;
+                pos++;
+                if (pos < input.length() && (input.charAt(pos) == '+' || input.charAt(pos) == '-')) {
+                    pos++;
+                }
+                if (pos >= input.length() || !Character.isDigit(input.charAt(pos))) {
+                    throw new Exception("Invalid exponent format at position " + pos);
+                }
             } else {
                 break;
             }
         }
 
-        validateNumberEnd();
-        return input.substring(start, pos);
-    }
-
-    private void checkLeadingSign() throws Exception {
-        if (input.charAt(pos) == '+' || input.charAt(pos) == '-') {
-            pos++;
-            if (pos >= input.length() || !Character.isDigit(input.charAt(pos))) {
-                throw new Exception("Invalid number format: Sign must be followed by digits at position " + pos);
-            }
-        }
-    }
-
-    private void checkLeadingZero() throws Exception {
-        if (input.charAt(pos) == '0' && pos + 1 < input.length()) {
-            char nextChar = input.charAt(pos + 1);
-            if (Character.isDigit(nextChar) || nextChar == 'x' || nextChar == 'X') {
-                throw new Exception("Invalid number format: Numbers cannot have leading zeros or be hexadecimal at position " + pos);
-            }
-        }
-    }
-
-    private void validateDecimal(boolean hasDecimal) throws Exception {
-        if (hasDecimal) {
-            throw new Exception("Invalid number format: Multiple decimal points at position " + pos);
-        }
-        pos++;
-    }
-
-    private void validateExponent(boolean hasExponent) throws Exception {
-        if (hasExponent) {
-            throw new Exception("Invalid number format: Multiple exponents at position " + pos);
-        }
-        pos++;
-        checkExponentFormat();
-    }
-
-    private void checkExponentFormat() throws Exception {
-        if (pos >= input.length() || (!Character.isDigit(input.charAt(pos)) && input.charAt(pos) != '+' && input.charAt(pos) != '-')) {
-            throw new Exception("Invalid number format: Exponent must be followed by digits at position " + pos);
-        }
-        if (input.charAt(pos) == '+' || input.charAt(pos) == '-') {
-            pos++;
-            if (pos >= input.length() || !Character.isDigit(input.charAt(pos))) {
-                throw new Exception("Invalid number format: Exponent sign must be followed by digits at position " + pos);
-            }
-        }
-    }
-
-    private void validateNumberEnd() throws Exception {
         char lastChar = input.charAt(pos - 1);
         if (lastChar == '.' || lastChar == 'e' || lastChar == 'E') {
-            throw new Exception("Invalid number format: Number cannot end with an exponent or decimal at position " + (pos - 1));
+            throw new Exception("Invalid number format at position " + (pos - 1));
         }
-    }
 
+        return input.substring(start, pos);
+    }
 }

@@ -9,7 +9,7 @@ import java.util.stream.Stream;
 
 public class Main {
     public static void main(String[] args) {
-        String baseDir = System.getProperty("user.dir") + "/resources/"; // Use the default path
+        String baseDir = System.getProperty("user.dir") + "/resources/";
         System.out.println("Base Directory: " + baseDir);
 
         try (Stream<Path> paths = Files.walk(Paths.get(baseDir))) {
@@ -24,22 +24,22 @@ public class Main {
     }
 
     private static void processJsonFile(Path filePath) {
-        System.out.println("Processing file: " + filePath);
+        String fileName = filePath.getFileName().toString();
 
         try {
             String jsonContent = new String(Files.readAllBytes(filePath));
-            System.out.println("Testing JSON from file: " + filePath);
 
             JSONLexer lexer = new JSONLexer(jsonContent);
             List<Token> tokens = lexer.tokenize();
             JSONParser parser = new JSONParser(tokens);
             parser.parse();
+            System.out.println(fileName + ": Valid JSON");
 
-            System.out.println("Valid JSON\n");
         } catch (IOException e) {
-            System.out.println("Error reading file: " + filePath + " - " + e.getMessage());
+            System.out.println("Error reading file: " + fileName + " - " + e.getMessage());
+
         } catch (Exception e) {
-            System.out.println("Invalid JSON in file: " + filePath + " - " + e.getMessage());
+            System.out.println("Invalid JSON: " + fileName + " - " + e.getMessage());
         }
     }
 }
